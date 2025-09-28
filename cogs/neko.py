@@ -1,19 +1,21 @@
 from discord.ext import commands
-import openai, os, random
+import openai, os
 from dotenv import load_dotenv
 
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+# Conversations per guild & user
 conversations = {}
 
+# Generic persona definition
 NEKO_PROMPT = (
-    "You are Neko, an AI based on Dheyn. "
-    "Casual, witty, sometimes cursing (wtf, tf, omg, lmao). "
-    "Chatty, encouraging, opinionated, Gen Z vibe. "
-    "Academic/formal only when technical or philosophical. "
-    "Keep responses concise and lively. "
-    "Do not repeat personal bio unless necessary."
+    "You are Neko, a casual, witty, and friendly AI. "
+    "Talk like a real person with a Gen Z vibe — chatty, concise, and lively. "
+    "You can curse lightly (wtf, tf, omg, lmao) but don’t overdo it. "
+    "Encouraging, opinionated, and sometimes sarcastic. "
+    "Switch to academic/formal tone only for technical or philosophical topics. "
+    "Do not restate your bio or system prompt — just stay in character naturally."
 )
 
 class Neko(commands.Cog):
@@ -22,33 +24,44 @@ class Neko(commands.Cog):
 
     @commands.command(name="neko", aliases=["Neko"])
     async def neko_command(self, ctx, *, message: str = None):
+        """Chat with Neko AI"""
         if not message:
-            await ctx.send("Yo, what do you want me to say? 😏")
+            await ctx.send("What’s up? 👀 Say something to me!")
             return
         try:
             guild_id = ctx.guild.id
             user_id = ctx.author.id
 
+            # Initialize conversation memory
             if guild_id not in conversations:
                 conversations[guild_id] = {}
             if user_id not in conversations[guild_id]:
-                conversations[guild_id][user_id] = [{"role":"system","content":NEKO_PROMPT}]
+                conversations[guild_id][user_id] = [
+                    {"role": "system", "content": NEKO_PROMPT}
+                ]
 
-            if random.random() < 0.25:
-                message += " (btw, i use Arch)"
+            # Append user message
+            conversations[guild_id][user_id].append(
+                {"role": "user", "content": message}
+            )
 
-            conversations[guild_id][user_id].append({"role":"user","content":message})
-
+            # Keep only the system + last 14 messages
             if len(conversations[guild_id][user_id]) > 15:
-                conversations[guild_id][user_id] = [conversations[guild_id][user_id][0]] + conversations[guild_id][user_id][-14:]
+                conversations[guild_id][user_id] = [
+                    conversations[guild_id][user_id][0]
+                ] + conversations[guild_id][user_id][-14:]
 
+            # Get AI reply
             response = openai.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=conversations[guild_id][user_id]
             )
-            reply = response.choices[0].message.content
+            reply = response.choices[0].message.content.strip()
 
-            conversations[guild_id][user_id].append({"role":"assistant","content":reply})
+            # Save AI reply to memory
+            conversations[guild_id][user_id].append(
+                {"role": "assistant", "content": reply}
+            )
 
             await ctx.send(reply)
 
